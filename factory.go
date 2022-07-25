@@ -1,240 +1,162 @@
 package buildsqlx
 
 import (
-	"fmt"
-	"log"
 	"strconv"
 	"strings"
-
-	"github.com/lib/pq"
 )
 
 const (
-	plusSign  = "+"
-	minusSign = "-"
 	// Errors
 	errTableCallBeforeOp = "sql: there was no Table() call with table name set"
 )
 
-// Get builds all sql statements chained before and executes query collecting data to the slice
-func (r *DB) Get() ([]map[string]interface{}, error) {
-	builder := r.Builder
-	if builder.table == "" {
-		return nil, fmt.Errorf(errTableCallBeforeOp)
-	}
-
-	query := ""
-	if len(builder.union) > 0 { // got union - need different logic to glue
-		for _, uBuilder := range builder.union {
-			query += uBuilder + " UNION "
-
-			if builder.isUnionAll {
-				query += "ALL "
-			}
-		}
-
-		query += builder.buildSelect()
-	} else { // std builder
-		query = builder.buildSelect()
-	}
-
-	rows, err := r.Sql().Query(query, prepareValues(r.Builder.whereBindings)...)
-	if err != nil {
-		return nil, err
-	}
-
-	columns, _ := rows.Columns()
-	count := len(columns)
-	values := make([]interface{}, count)
-	valuePtrs := make([]interface{}, count)
-
-	// collecting data from struct with fields
-	var res []map[string]interface{}
-
-	for rows.Next() {
-		collect := make(map[string]interface{}, count)
-
-		for i := range columns {
-			valuePtrs[i] = &values[i]
-		}
-
-		err := rows.Scan(valuePtrs...)
-
-		if err != nil {
-			return nil, err
-		}
-
-		for i, col := range columns {
-			val := values[i]
-
-			b, ok := val.([]byte)
-			if ok {
-				collect[col] = string(b)
-			} else {
-				collect[col] = val
-			}
-		}
-
-		res = append(res, collect)
-	}
-
-	return res, nil
-}
-
-func prepareValues(values []map[string]interface{}) []interface{} {
-	var vls []interface{}
-	for _, v := range values {
-		_, vals, _ := prepareBindings(v)
-		vls = append(vls, vals...)
-	}
-	return vls
-}
-
 // buildSelect constructs a query for select statement
 func (r *builder) buildSelect() string {
-	query := `SELECT ` + strings.Join(r.columns, `, `) + ` FROM "` + r.table + `"`
 
-	return query + r.buildClauses()
+	// SELECT
+	r.WriteString("SELECT").
+		Pad().WriteString(strings.Join(r.columns, `, `)).
+		Pad().WriteString("FROM").Pad().
+		Ident(r.table).
+		Pad()
+
+	// Clauses
+	r.buildClauses()
+
+	return r.String()
 }
 
 // builds query string clauses
-func (r *builder) buildClauses() string {
-	clauses := ""
+func (r *builder) buildClauses() {
 	for _, j := range r.join {
-		clauses += j
+		r.WriteString(j)
 	}
 
 	// build where clause
-	if len(r.whereBindings) > 0 {
-		clauses += composeWhere(r.whereBindings, r.startBindingsAt)
-	} else { // std without bindings todo: change all to bindings
-		clauses += r.where
+	if r.where.Len() > 0 {
+		r.WriteString(r.where.String())
 	}
 
 	if r.groupBy != "" {
-		clauses += " GROUP BY " + r.groupBy
+		r.Pad().WriteString("GROUP BY").Pad()
+		r.Ident(r.groupBy)
 	}
 
-	if r.having != "" {
-		clauses += " HAVING " + r.having
+	if r.having.Len() > 0 {
+		r.Pad().WriteString("HAVING").Pad()
+		r.WriteString(r.having.String())
 	}
 
-	clauses += composeOrderBy(r.orderBy, r.orderByRaw)
+	r.composeOrderBy()
 
 	if r.limit > 0 {
-		clauses += " LIMIT " + strconv.FormatInt(r.limit, 10)
+		r.Pad().WriteString("LIMIT").Pad()
+		r.WriteString(strconv.FormatInt(r.limit, 10))
 	}
 
 	if r.offset > 0 {
-		clauses += " OFFSET " + strconv.FormatInt(r.offset, 10)
+		r.Comma()
+		r.WriteString(strconv.FormatInt(r.offset, 10))
 	}
 
 	if r.lockForUpdate != nil {
-		clauses += *r.lockForUpdate
+		r.WriteString(*r.lockForUpdate)
 	}
-
-	return clauses
 }
 
-// composes WHERE clause string for particular query stmt
-func composeWhere(whereBindings []map[string]interface{}, startedAt int) string {
-	where := " WHERE "
-	i := startedAt
-	for _, m := range whereBindings {
-		for k := range m {
-			// operand >= $i
-			where += k + " $" + strconv.Itoa(i)
-			i++
-		}
+// builds query string clauses
+func buildClauses(r *builder) string {
+
+	b := deepClone(r)
+	b.sb.Reset()
+
+	for _, j := range b.join {
+		b.WriteString(j)
 	}
-	return where
+
+	// build where clause
+	if b.where.Len() > 0 {
+		b.WriteString(b.where.String())
+	}
+
+	if b.groupBy != "" {
+		b.Pad().WriteString("GROUP BY").Pad()
+		b.Ident(b.groupBy)
+	}
+
+	if b.having.Len() > 0 {
+		b.Pad().WriteString("HAVING").Pad()
+		b.WriteString(b.having.String())
+	}
+
+	b.composeOrderBy()
+
+	if b.limit > 0 {
+		b.Pad().WriteString("LIMIT").Pad()
+		b.WriteString(strconv.FormatInt(b.limit, 10))
+	}
+
+	if b.offset > 0 {
+		b.Comma()
+		b.WriteString(strconv.FormatInt(b.offset, 10))
+	}
+
+	if b.lockForUpdate != nil {
+		b.WriteString(*b.lockForUpdate)
+	}
+
+	return b.String()
 }
 
 // composers ORDER BY clause string for particular query stmt
-func composeOrderBy(orderBy []map[string]string, orderByRaw *string) string {
-	if len(orderBy) > 0 {
-		orderStr := ""
-		for _, m := range orderBy {
-			for field, direct := range m {
-				if orderStr == "" {
-					orderStr = " ORDER BY " + field + " " + direct
-				} else {
-					orderStr += ", " + field + " " + direct
-				}
+func (r *builder) composeOrderBy() {
+	if len(r.orderBy) > 0 {
+		fist := true
+		for f, d := range r.orderBy {
+			if fist {
+				fist = false
+				r.Pad().WriteString("ORDER BY").Pad().Ident(f).Pad().WriteString(d)
+			} else {
+				r.Pad().Comma().Ident(f).Pad().WriteString(d)
 			}
 		}
-		return orderStr
-	} else if orderByRaw != nil {
-		return " ORDER BY " + *orderByRaw
+		return
+	} else if r.orderByRaw != nil {
+		r.Pad().WriteString("ORDER BY").Pad().WriteString(*r.orderByRaw)
 	}
-	return ""
 }
 
 // Insert inserts one row with param bindings
-func (r *DB) Insert(data map[string]interface{}) error {
+func (r *DB) Insert(data map[string]interface{}) (query string, values []interface{}) {
 	builder := r.Builder
 	if builder.table == "" {
-		return fmt.Errorf(errTableCallBeforeOp)
+		panic(errTableCallBeforeOp)
 	}
 
 	columns, values, bindings := prepareBindings(data)
 
-	query := `INSERT INTO "` + builder.table + `" (` + strings.Join(columns, `, `) + `) VALUES(` + strings.Join(bindings, `, `) + `)`
+	builder.WriteString("INSERT INTO").
+		Pad().Ident(builder.table).Pad().
+		Nested(func(s *sqlBuilder) {
+			s.WriteString(strings.Join(columns, `, `))
+		}).
+		Pad().WriteString("VALUES").
+		Nested(func(s *sqlBuilder) {
+			s.WriteString(strings.Join(bindings, `, `))
+		})
 
-	_, err := r.Sql().Exec(query, values...)
+	query = builder.String()
 
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// InsertGetId inserts one row with param bindings and returning id
-func (r *DB) InsertGetId(data map[string]interface{}) (uint64, error) {
-	builder := r.Builder
-	if builder.table == "" {
-		return 0, fmt.Errorf(errTableCallBeforeOp)
-	}
-
-	columns, values, bindings := prepareBindings(data)
-
-	query := `INSERT INTO "` + builder.table + `" (` + strings.Join(columns, `, `) + `) VALUES(` + strings.Join(bindings, `, `) + `) RETURNING id`
-
-	var id uint64
-	err := r.Sql().QueryRow(query, values...).Scan(&id)
-
-	if err != nil {
-		return 0, err
-	}
-
-	return id, nil
+	return
 }
 
 // prepareBindings prepares slices to split in favor of INSERT sql statement
 func prepareBindings(data map[string]interface{}) (columns []string, values []interface{}, bindings []string) {
 	i := 1
 	for column, value := range data {
-		columns = append(columns, column)
-
-		switch v := value.(type) {
-		case string:
-			//if where { // todo: left comments for further exploration, probably incorrect behaviour for pg driver
-			//	values = append(values, "'"+v+"'")
-			//} else {
-			values = append(values, v)
-			//}
-		case int:
-			values = append(values, strconv.FormatInt(int64(v), 10))
-		case float64:
-			values = append(values, fmt.Sprintf("%g", v))
-		case int64:
-			values = append(values, strconv.FormatInt(v, 10))
-		case uint64:
-			values = append(values, strconv.FormatUint(v, 10))
-		}
-
-		bindings = append(bindings, "$"+strconv.FormatInt(int64(i), 10))
+		columns = append(columns, "`"+column+"`")
+		values = append(values, value)
+		bindings = append(bindings, "?")
 		i++
 	}
 
@@ -242,51 +164,31 @@ func prepareBindings(data map[string]interface{}) (columns []string, values []in
 }
 
 // InsertBatch inserts multiple rows based on transaction
-func (r *DB) InsertBatch(data []map[string]interface{}) error {
+func (r *DB) InsertBatch(data []map[string]interface{}) (query string, values [][]interface{}) {
 	builder := r.Builder
 	if builder.table == "" {
-		return fmt.Errorf(errTableCallBeforeOp)
+		panic(errTableCallBeforeOp)
 	}
 
-	txn, err := r.Sql().Begin()
-	if err != nil {
-		log.Fatal(err)
-	}
+	columns, values, bindings := prepareInsertBatch(data)
 
-	columns, values := prepareInsertBatch(data)
+	builder.WriteString("INSERT INTO").
+		Pad().Ident(builder.table).Pad().
+		Nested(func(s *sqlBuilder) {
+			s.WriteString(strings.Join(columns, `, `))
+		}).
+		Pad().WriteString("VALUES").
+		Nested(func(s *sqlBuilder) {
+			s.WriteString(strings.Join(bindings, `, `))
+		})
 
-	stmt, err := txn.Prepare(pq.CopyIn(builder.table, columns...))
-	if err != nil {
-		return err
-	}
+	query = builder.String()
 
-	for _, value := range values {
-		_, err = stmt.Exec(value...)
-		if err != nil {
-			return err
-		}
-	}
-
-	_, err = stmt.Exec()
-	if err != nil {
-		return err
-	}
-
-	err = stmt.Close()
-	if err != nil {
-		return err
-	}
-
-	err = txn.Commit()
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return
 }
 
 // prepareInsertBatch prepares slices to split in favor of INSERT sql statement
-func prepareInsertBatch(data []map[string]interface{}) (columns []string, values [][]interface{}) {
+func prepareInsertBatch(data []map[string]interface{}) (columns []string, values [][]interface{}, bindings []string) {
 	values = make([][]interface{}, len(data))
 	colToIdx := make(map[string]int)
 
@@ -297,23 +199,13 @@ func prepareInsertBatch(data []map[string]interface{}) (columns []string, values
 		for column, value := range v {
 			if k == 0 {
 				columns = append(columns, column)
+				bindings = append(bindings, "?")
 				// todo: don't know yet how to match them explicitly (it is bad idea, but it works well now)
 				colToIdx[column] = i
 				i++
 			}
 
-			switch casted := value.(type) {
-			case string:
-				values[k][colToIdx[column]] = casted
-			case int:
-				values[k][colToIdx[column]] = strconv.FormatInt(int64(casted), 10)
-			case float64:
-				values[k][colToIdx[column]] = fmt.Sprintf("%g", casted)
-			case int64:
-				values[k][colToIdx[column]] = strconv.FormatInt(casted, 10)
-			case uint64:
-				values[k][colToIdx[column]] = strconv.FormatUint(casted, 10)
-			}
+			values[k][colToIdx[column]] = value
 		}
 	}
 
@@ -322,117 +214,102 @@ func prepareInsertBatch(data []map[string]interface{}) (columns []string, values
 
 // Update builds an UPDATE sql stmt with corresponding where/from clauses if stated
 // returning affected rows
-func (r *DB) Update(data map[string]interface{}) (int64, error) {
+func (r *DB) Update(data map[string]interface{}) (query string, values []interface{}) {
 	builder := r.Builder
 	if builder.table == "" {
-		return 0, fmt.Errorf(errTableCallBeforeOp)
+		panic(errTableCallBeforeOp)
 	}
 
 	columns, values, bindings := prepareBindings(data)
-	setVal := ""
+
+	builder.WriteString("UPDATE").
+		Pad().Ident(builder.table).Pad().
+		WriteString("SET")
+
 	l := len(columns)
 	for k, col := range columns {
-		setVal += col + " = " + bindings[k]
+		builder.Pad().Ident(col).WriteOp(OpEQ).WriteString(bindings[k])
 		if k < l-1 {
-			setVal += ", "
+			builder.Comma()
 		}
 	}
 
-	query := `UPDATE "` + r.Builder.table + `" SET ` + setVal
-	if r.Builder.from != "" {
-		query += " FROM " + r.Builder.from
-	}
+	builder.buildClauses()
 
-	r.Builder.startBindingsAt = l + 1
-	query += r.Builder.buildClauses()
-	values = append(values, prepareValues(r.Builder.whereBindings)...)
-	res, err := r.Sql().Exec(query, values...)
-	if err != nil {
-		return 0, err
-	}
+	query += builder.String()
+	values = append(values, r.Builder.where.args...)
 
-	return res.RowsAffected()
+	return
 }
 
 // Delete builds a DELETE stmt with corresponding where clause if stated
 // returning affected rows
-func (r *DB) Delete() (int64, error) {
+func (r *DB) Delete() (query string, values []interface{}) {
 	builder := r.Builder
 	if builder.table == "" {
-		return 0, fmt.Errorf(errTableCallBeforeOp)
+		panic(errTableCallBeforeOp)
 	}
 
-	query := `DELETE FROM "` + r.Builder.table + `"`
-	query += r.Builder.buildClauses()
-	res, err := r.Sql().Exec(query, prepareValues(r.Builder.whereBindings)...)
-	if err != nil {
-		return 0, err
-	}
-	return res.RowsAffected()
+	builder.WriteString("DELETE FROM").
+		Pad().Ident(builder.table).Pad()
+
+	builder.buildClauses()
+
+	query = builder.String()
+	values = r.Builder.where.args
+
+	return
 }
 
 // Replace inserts data if conflicting row hasn't been found, else it will update an existing one
-func (r *DB) Replace(data map[string]interface{}, conflict string) (int64, error) {
+func (r *DB) Replace(data map[string]interface{}, conflict string) (query string, values []interface{}) {
 	builder := r.Builder
 	if builder.table == "" {
-		return 0, fmt.Errorf(errTableCallBeforeOp)
+		panic(errTableCallBeforeOp)
 	}
 
 	columns, values, bindings := prepareBindings(data)
-	query := `INSERT INTO "` + builder.table + `" (` + strings.Join(columns, `, `) + `) VALUES(` + strings.Join(bindings, `, `) + `) ON CONFLICT(` + conflict + `) DO UPDATE SET `
+
+	builder.WriteString("INSERT INTO").
+		Pad().Ident(builder.table).Pad().
+		Nested(func(s *sqlBuilder) {
+			s.WriteString(strings.Join(columns, `, `))
+		}).
+		Pad().WriteString("VALUES").
+		Nested(func(s *sqlBuilder) {
+			s.WriteString(strings.Join(bindings, `, `))
+		}).
+		WriteString("ON DUPLICATE KEY UPDATE").Pad()
+
+	l := len(columns)
 	for i, v := range columns {
-		columns[i] = v + " = excluded." + v
+		builder.Ident(v).WriteOp(OpEQ).Pad().WriteString("excluded.").WriteString(v)
+		if i < l-1 {
+			builder.Comma()
+		}
 	}
 
-	query += strings.Join(columns, ", ")
-	res, err := r.Sql().Exec(query, values...)
-	if err != nil {
-		return 0, err
-	}
-	return res.RowsAffected()
+	query = builder.String()
+
+	return
 }
 
-// InTransaction executes fn passed as an argument in transaction mode
-// if there are no results returned - txn will be rolled back, otherwise committed and returned
-func (r *DB) InTransaction(fn func() (interface{}, error)) error {
-	txn, err := r.Sql().Begin()
-	if err != nil {
-		return err
-	}
+// Drop drops >=1 tables
+func (r *DB) Drop(tables string) string {
+	return "DROP TABLE " + r.Builder.Quote(tables)
+}
 
-	res, err := fn()
-	if err != nil {
-		return err
-	}
+// Truncate clears >=1 tables
+func (r *DB) Truncate(tables string) string {
+	return "TRUNCATE " + r.Builder.Quote(tables)
+}
 
-	isOk := false
-	switch v := res.(type) {
-	case int64:
-		if v > 0 {
-			isOk = true
-		}
-	case uint64:
-		if v > 0 {
-			isOk = true
-		}
-	case []map[string]interface{}:
-		if len(v) > 0 {
-			isOk = true
-		}
-	case map[string]interface{}:
-		if len(v) > 0 {
-			isOk = true
-		}
-	}
+// DropIfExists drops >=1 tables if they are existent
+func (r *DB) DropIfExists(tables string) string {
+	return "DROP TABLE IF EXISTS " + r.Builder.Quote(tables)
+}
 
-	if !isOk {
-		return txn.Rollback()
-	}
-
-	err = txn.Commit()
-	if err != nil {
-		return err
-	}
-
-	return nil
+// Rename renames from - to new table name
+func (r *DB) Rename(from, to string) string {
+	return "ALTER TABLE " + r.Builder.Quote(from) + " RENAME TO " + r.Builder.Quote(to)
 }

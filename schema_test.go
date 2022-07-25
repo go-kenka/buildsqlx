@@ -1,7 +1,6 @@
 package buildsqlx
 
 import (
-	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -9,146 +8,229 @@ import (
 
 const TableToCreate = "big_tbl"
 
+var (
+	db = NewDb(NewConnection("mysql"))
+)
+
 func TestDB_CreateTable(t *testing.T) {
-	_, err := db.DropIfExists(TableToCreate)
-	assert.NoError(t, err)
-
-	_, err = db.Schema(TableToCreate, func(table *Table) error {
-		table.Increments("id")
-		table.String("title", 128).Default("The quick brown fox jumped over the lazy dog").Unique("idx_ttl")
-		table.Boolean("is_active")
-		table.SmallInt("cnt").Default(1)
-		table.Integer("points").NotNull()
-		table.BigInt("likes").Index("idx_likes")
-		table.Text("comment").Comment("user comment").Collation("de-LU-x-icu")
-		table.DblPrecision("likes_to_points").Default(0.0)
-		table.Decimal("tax", 2, 2)
-		table.TsVector("body")
-		table.TsQuery("body_query")
-		table.Point("pt")
-		table.Polygon("poly")
-		table.TableComment("big table for big data")
-
-		return nil
-	})
-	assert.NoError(t, err)
-
-	is, err := db.HasTable("public", TableToCreate)
-	assert.NoError(t, err)
-	assert.True(t, is)
-
-	_, err = db.Schema("tbl_to_ref", func(table *Table) error {
-		table.Increments("id")
-		table.Integer("big_tbl_id").ForeignKey("fk_idx_big_tbl_id", TableToCreate, "id")
-
-		return nil
-	})
-	assert.NoError(t, err)
-
-	// test some err returning from fn()
-	_, err = db.Schema(TableToCreate, func(table *Table) error {
-		return errors.New("some err")
-	})
-	assert.Error(t, err)
-
-	// 1st drop the referencing tbl
-	_, err = db.Drop("tbl_to_ref")
-	assert.NoError(t, err)
-	// then referenced
-	_, err = db.Drop(TableToCreate)
-	assert.NoError(t, err)
+	type args struct {
+		tblName string
+		fn      func(table *Table) error
+	}
+	tests := []struct {
+		name    string
+		r       *DB
+		args    args
+		wantSql []string
+		wantErr bool
+	}{
+		{
+			name: "全类型测试",
+			r:    db,
+			args: args{
+				tblName: TableToCreate,
+				fn: func(table *Table) error {
+					table.Increments("increments")
+					table.Boolean("boolean")
+					// table.BigIncrements("bigincrements")
+					table.SmallInt("smallint")
+					table.MediumInt("mediumint")
+					table.Integer("integer")
+					table.BigInt("bigint")
+					table.Float("float")
+					table.Double("double")
+					table.Decimal("decimal", 6, 2)
+					table.Date("date")
+					table.Time("time")
+					table.Year("year")
+					table.DateTime("datetime")
+					table.Timestamp("timestamp", true)
+					table.Timestamp("timestamp1", false)
+					table.Char("char", 10)
+					table.String("string", 20)
+					table.Text("text")
+					table.Blob("blob")
+					table.LongText("longtext")
+					table.LongBlob("longblob")
+					table.Json("json")
+					return nil
+				},
+			},
+		},
+		{
+			name: "两个自增主键",
+			r:    db,
+			args: args{
+				tblName: TableToCreate,
+				fn: func(table *Table) error {
+					table.Increments("increments")
+					table.BigIncrements("bigincrements")
+					return nil
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "索引",
+			r:    db,
+			args: args{
+				tblName: TableToCreate,
+				fn: func(table *Table) error {
+					table.BigIncrements("bigincrements")
+					table.String("index", 6).Index("idx_aaa")
+					return nil
+				},
+			},
+		},
+		{
+			name: "外键",
+			r:    db,
+			args: args{
+				tblName: TableToCreate,
+				fn: func(table *Table) error {
+					table.BigIncrements("bigincrements")
+					table.BigInt("user_id").ForeignKey("fx_aaa", "user", "id", nil, nil)
+					return nil
+				},
+			},
+		},
+		{
+			name: "默认值",
+			r:    db,
+			args: args{
+				tblName: TableToCreate,
+				fn: func(table *Table) error {
+					table.Increments("increments")
+					table.Boolean("boolean").Default(false)
+					table.SmallInt("smallint").Default(1)
+					table.MediumInt("mediumint").Default(0)
+					table.Integer("integer").Default(12)
+					table.BigInt("bigint").Default(44)
+					table.Float("float").Default(1.5)
+					table.Double("double").Default(1.8)
+					table.Decimal("decimal", 6, 2).Default(12.00)
+					table.Date("date").Default("2012-01-01")
+					table.Time("time").Default("10:10:01")
+					table.Year("year").Default(2014)
+					table.DateTime("datetime").Default("2012-01-01 10:10:01")
+					table.Timestamp("timestamp", true)
+					table.Timestamp("timestamp1", false)
+					table.Char("char", 10).Default("aaa")
+					table.String("string", 20).Default("哈哈哈")
+					table.Text("text").Default("hhh哈哈哈")
+					table.Blob("blob").Default("1212")
+					table.LongText("longtext").Default("?///ddd")
+					table.LongBlob("longblob").Default("sss...")
+					table.Json("json").Default("{}")
+					return nil
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotSql, err := tt.r.CreateTable(tt.args.tblName, tt.args.fn)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				t.Logf("%v", gotSql)
+				t.Logf("output %v", tt.wantSql)
+			}
+		})
+	}
 }
 
-func TestTable_BigIncrements(t *testing.T) {
-	_, err := db.DropIfExists(TableToCreate)
-	assert.NoError(t, err)
-
-	res, err := db.Schema(TableToCreate, func(table *Table) error {
-		table.BigIncrements("id")
-		table.Numeric("price", 4, 3).Index("idx_price")
-		table.Jsonb("taxes")
-
-		return nil
-	})
-	assert.NoError(t, err)
-
-	_, err = res.RowsAffected()
-	assert.NoError(t, err)
-
-	is, err := db.HasTable("public", TableToCreate)
-	assert.NoError(t, err)
-	assert.True(t, is)
-
-	// test add the column
-	_, err = db.Schema(TableToCreate, func(table *Table) error {
-		table.String("title", 64)
-		table.DropIndex("idx_price")
-
-		return nil
-	})
-	assert.NoError(t, err)
-
-	isCol, err := db.HasColumns("public", TableToCreate, "title")
-	assert.NoError(t, err)
-	assert.True(t, isCol)
-
-	// test modify the column
-	_, err = db.Schema(TableToCreate, func(table *Table) error {
-		table.String("title", 128).Change()
-
-		return nil
-	})
-	assert.NoError(t, err)
-
-	// test drop the column
-	_, err = db.Schema(TableToCreate, func(table *Table) error {
-		table.DropColumn("title")
-
-		return nil
-	})
-	assert.NoError(t, err)
-
-	isCol, err = db.HasColumns("public", TableToCreate, "title")
-	assert.NoError(t, err)
-	assert.False(t, isCol)
-
-	_, err = db.Drop(TableToCreate)
-	assert.NoError(t, err)
-}
-
-func TestTable_DateTime(t *testing.T) {
-	_, err := db.DropIfExists(TableToCreate)
-	assert.NoError(t, err)
-
-	_, err = db.Schema(TableToCreate, func(table *Table) error {
-		table.Increments("id")
-		table.Json("settings")
-		table.Char("tag", 10)
-		table.Date("birthday", false)
-		table.DateTime("created_at", true)
-		table.DateTimeTz("updated_at", true)
-
-		return nil
-	})
-	assert.NoError(t, err)
-
-	is, err := db.HasTable("public", TableToCreate)
-	assert.NoError(t, err)
-	assert.True(t, is)
-
-	// test modify the column
-	_, err = db.Schema(TableToCreate, func(table *Table) error {
-		table.String("tag", 12).Index("idx_tag")
-		table.Rename("settings", "options")
-
-		return nil
-	})
-	assert.NoError(t, err)
-
-	isCol, err := db.HasColumns("public", TableToCreate, "options")
-	assert.NoError(t, err)
-	assert.True(t, isCol)
-
-	_, err = db.Drop(TableToCreate)
-	assert.NoError(t, err)
+func TestDB_ModifyTable(t *testing.T) {
+	type args struct {
+		tblName string
+		fn      func(table *Table) error
+	}
+	tests := []struct {
+		name    string
+		r       *DB
+		args    args
+		wantSql []string
+		wantErr bool
+	}{
+		{
+			name: "全类型测试",
+			r:    db,
+			args: args{
+				tblName: TableToCreate,
+				fn: func(table *Table) error {
+					table.Increments("increments").Change()
+					table.Boolean("boolean").Change()
+					// table.BigIncrements("bigincrements")
+					table.SmallInt("smallint").Change()
+					table.MediumInt("mediumint").Change()
+					table.Integer("integer").Change()
+					table.BigInt("bigint").Change()
+					table.Float("float").Change()
+					table.Double("double").Change()
+					table.Decimal("decimal", 6, 2).Change()
+					table.Date("date").Change()
+					table.Time("time").Change()
+					table.Year("year").Change()
+					table.DateTime("datetime").Change()
+					table.Timestamp("timestamp", true).Change()
+					table.Timestamp("timestamp1", false).Change()
+					table.Char("char", 10).Change()
+					table.String("string", 20).Change()
+					table.Text("text").Change()
+					table.Blob("blob").Change()
+					table.LongText("longtext").Change()
+					table.LongBlob("longblob").Change()
+					table.Json("json").Change()
+					return nil
+				},
+			},
+		},
+		{
+			name: "添加/变更/删除测试",
+			r:    db,
+			args: args{
+				tblName: TableToCreate,
+				fn: func(table *Table) error {
+					table.Increments("increments").Change()
+					table.Boolean("boolean").Change()
+					// table.BigIncrements("bigincrements")
+					table.SmallInt("smallint").Index("idx_xxx")
+					table.MediumInt("mediumint")
+					table.DropColumn("integer")
+					table.DropColumn("bigint")
+					table.DropIndex("idx_xssa")
+					table.Float("float").Change()
+					table.Double("double").Change()
+					table.Decimal("decimal", 6, 2).Change()
+					table.Date("date").Change()
+					table.Time("time").Change()
+					table.Year("year").Change()
+					table.DateTime("datetime").Change()
+					table.Timestamp("timestamp", true).Change()
+					table.Timestamp("timestamp1", false).Change()
+					table.Char("char", 10).Change()
+					table.String("string", 20).Change()
+					table.Text("text").Change()
+					table.Blob("blob").Change()
+					table.LongText("longtext").Change()
+					table.LongBlob("longblob").Change()
+					table.Json("json").Change()
+					return nil
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotSql, err := tt.r.ModifyTable(tt.args.tblName, tt.args.fn)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				t.Logf("%v", gotSql)
+				t.Logf("output %v", tt.wantSql)
+			}
+		})
+	}
 }
