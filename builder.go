@@ -194,6 +194,14 @@ func (r *DB) buildJoin(joinType, table, on string) *DB {
 }
 
 // Where accepts left operand-operator-right operand to apply them to where clause
+func (r *DB) WhereRaw(raw string, val ...interface{}) *DB {
+	r.Builder.where.WriteString(" WHERE ").
+		WriteString(raw).
+		Args(val...)
+	return r
+}
+
+// Where accepts left operand-operator-right operand to apply them to where clause
 func (r *DB) Where(col string, op Op, val interface{}) *DB {
 	r.Builder.where.WriteString(" WHERE ").
 		Ident(col).
