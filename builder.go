@@ -37,12 +37,6 @@ type builder struct {
 	lockForUpdate *string
 }
 
-// DB is an entity that composite builder and Conn types
-type DB struct {
-	Builder *builder
-	Conn    *Connection
-}
-
 func newBuilder() *builder {
 	return &builder{
 		columns: []string{"*"},
@@ -56,12 +50,6 @@ func deepClone(b *builder) *builder {
 // Target returns db driver
 func (r *DB) Target() string {
 	return r.Conn.driver
-}
-
-// NewDb constructs default DB structure
-func NewDb(c *Connection) *DB {
-	b := newBuilder()
-	return &DB{Builder: b, Conn: c}
 }
 
 // Table appends table name to sql query

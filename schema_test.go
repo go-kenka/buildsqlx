@@ -9,7 +9,7 @@ import (
 const TableToCreate = "big_tbl"
 
 var (
-	db = NewDb(NewConnection("mysql"))
+	db = NewConnection("mysql").DB()
 )
 
 func TestDB_CreateTable(t *testing.T) {

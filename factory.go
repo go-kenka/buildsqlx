@@ -154,7 +154,7 @@ func (r *DB) Insert(data map[string]interface{}) (query string, values []interfa
 func prepareBindings(data map[string]interface{}) (columns []string, values []interface{}, bindings []string) {
 	i := 1
 	for column, value := range data {
-		columns = append(columns, "`"+column+"`")
+		columns = append(columns, column)
 		values = append(values, value)
 		bindings = append(bindings, "?")
 		i++
