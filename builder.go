@@ -488,7 +488,7 @@ func (r *DB) WhereEmpty(col string) *DB {
 		Ident(col).
 		WriteOp(OpEQ).
 		Arg("").
-		WriteString(and).
+		WriteString(or).
 		Ident(col).
 		WriteOp(OpIsNull)
 	return r
@@ -501,7 +501,7 @@ func (r *DB) OrWhereEmpty(col string) *DB {
 		Ident(col).
 		WriteOp(OpEQ).
 		Arg("").
-		WriteString(and).
+		WriteString(or).
 		Ident(col).
 		WriteOp(OpIsNull)
 	return r
@@ -514,7 +514,7 @@ func (r *DB) AndWhereEmpty(col string) *DB {
 		Ident(col).
 		WriteOp(OpEQ).
 		Arg("").
-		WriteString(and).
+		WriteString(or).
 		Ident(col).
 		WriteOp(OpIsNull)
 	return r
