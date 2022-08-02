@@ -14,11 +14,23 @@ const (
 func (r *builder) buildSelect() string {
 
 	// SELECT
-	r.WriteString("SELECT").
-		Pad().WriteString(strings.Join(r.columns, `, `)).
-		Pad().WriteString("FROM").Pad().
-		Ident(r.table).
-		Pad()
+	r.WriteString("SELECT").Pad()
+
+	// field
+	l := len(r.columns)
+	for k, col := range r.columns {
+		if col == "*" || strings.HasSuffix(col, ".*") {
+			r.WriteString(col)
+		} else {
+			r.Ident(col)
+		}
+		if k < l-1 {
+			r.Comma()
+		}
+	}
+
+	// from
+	r.Pad().WriteString("FROM").Pad().Ident(r.table).Pad()
 
 	// Clauses
 	r.buildClauses()
@@ -138,7 +150,13 @@ func (r *DB) Insert(data map[string]interface{}) (query string, values []interfa
 	builder.WriteString("INSERT INTO").
 		Pad().Ident(builder.table).Pad().
 		Nested(func(s *sqlBuilder) {
-			s.WriteString(strings.Join(columns, `, `))
+			l := len(columns)
+			for k, col := range columns {
+				s.Ident(col)
+				if k < l-1 {
+					s.Comma()
+				}
+			}
 		}).
 		Pad().WriteString("VALUES").
 		Nested(func(s *sqlBuilder) {
@@ -175,7 +193,13 @@ func (r *DB) InsertBatch(data []map[string]interface{}) (query string, values []
 	builder.WriteString("INSERT INTO").
 		Pad().Ident(builder.table).Pad().
 		Nested(func(s *sqlBuilder) {
-			s.WriteString(strings.Join(columns, `, `))
+			l := len(columns)
+			for k, col := range columns {
+				s.Ident(col)
+				if k < l-1 {
+					s.Comma()
+				}
+			}
 		}).
 		Pad().WriteString("VALUES").
 		Nested(func(s *sqlBuilder) {
