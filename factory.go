@@ -22,7 +22,11 @@ func (r *builder) buildSelect() string {
 		if col == "*" || strings.HasSuffix(col, ".*") {
 			r.WriteString(col)
 		} else {
-			r.Ident(col)
+			if strings.Contains(col, "`") {
+				r.WriteString(col)
+			} else {
+				r.Ident(col)
+			}
 		}
 		if k < l-1 {
 			r.Comma()
