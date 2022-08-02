@@ -22,7 +22,8 @@ func (r *builder) buildSelect() string {
 		if col == "*" || strings.HasSuffix(col, ".*") {
 			r.WriteString(col)
 		} else {
-			if strings.Contains(col, "`") {
+			// ``/()/AS/as
+			if strings.Contains(col, "`") || strings.Contains(col, "(") || strings.Contains(col, "AS") || strings.Contains(col, "as") {
 				r.WriteString(col)
 			} else {
 				r.Ident(col)
