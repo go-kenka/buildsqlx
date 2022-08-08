@@ -622,7 +622,7 @@ func (r *DB) modifyTable(t *Table) (sql []string, err error) {
 	t.sb.WriteString(t.sb.child.String())
 
 	if t.comment != nil {
-		t.sb.WriteString("COMMENT").Pad().WriteByte('\'').WriteString(*t.comment).WriteByte('\'')
+		t.sb.Pad().WriteString("COMMENT").Pad().WriteByte('\'').WriteString(*t.comment).WriteByte('\'')
 	}
 
 	sql = append(sql, t.sb.String())
