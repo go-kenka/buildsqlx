@@ -127,12 +127,12 @@ func buildClauses(r *builder) string {
 func (r *builder) composeOrderBy() {
 	if len(r.orderBy) > 0 {
 		fist := true
-		for f, d := range r.orderBy {
+		for _, d := range r.orderBy {
 			if fist {
 				fist = false
-				r.Pad().WriteString("ORDER BY").Pad().Ident(f).Pad().WriteString(d)
+				r.Pad().WriteString("ORDER BY").Pad().IdentPoint(r.table).Ident(d.Column).Pad().WriteString(d.Direction)
 			} else {
-				r.Pad().Comma().Ident(f).Pad().WriteString(d)
+				r.Pad().Comma().IdentPoint(r.table).Ident(d.Column).Pad().WriteString(d.Direction)
 			}
 		}
 		return

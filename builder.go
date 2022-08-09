@@ -18,6 +18,12 @@ const (
 	or            = " OR "
 )
 
+// orderBy sort
+type orderBy struct {
+	Column    string
+	Direction string
+}
+
 // inner type to build qualified sql
 type builder struct {
 	sqlBuilder
@@ -25,7 +31,7 @@ type builder struct {
 	table         string
 	from          string
 	join          []string
-	orderBy       map[string]string
+	orderBy       []*orderBy
 	orderByRaw    *string
 	groupBy       string
 	having        *sqlBuilder
@@ -68,7 +74,7 @@ func (r *DB) reset() {
 	r.Builder.where = &sqlBuilder{}
 	r.Builder.groupBy = ""
 	r.Builder.having = &sqlBuilder{}
-	r.Builder.orderBy = make(map[string]string, 0)
+	r.Builder.orderBy = make([]*orderBy, 0)
 	r.Builder.offset = 0
 	r.Builder.limit = 0
 	r.Builder.join = []string{}
@@ -89,7 +95,10 @@ func (r *DB) Select(args ...string) *DB {
 
 // OrderBy adds ORDER BY expression to SQL stmt
 func (r *DB) OrderBy(column string, direction string) *DB {
-	r.Builder.orderBy[column] = direction
+	r.Builder.orderBy = append(r.Builder.orderBy, &orderBy{
+		Column:    column,
+		Direction: direction,
+	})
 	return r
 }
 
