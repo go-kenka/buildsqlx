@@ -117,6 +117,14 @@ func (b *sqlBuilder) Args(a ...interface{}) *sqlBuilder {
 	return b
 }
 
+// Args appends a list of arguments to the builder.
+func (b *sqlBuilder) Params(a ...interface{}) *sqlBuilder {
+	for i := range a {
+		b.args = append(b.args, a[i])
+	}
+	return b
+}
+
 // Comma adds a comma to the query.
 func (b *sqlBuilder) Comma() *sqlBuilder {
 	return b.WriteString(", ")

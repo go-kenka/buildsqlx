@@ -114,6 +114,7 @@ func (r *DB) GroupBy(expr string) *DB {
 // Having similar to Where but used with GroupBy to apply over the grouped results
 func (r *DB) Having(col string, op Op, val interface{}) *DB {
 	r.Builder.having.
+		IdentPoint(r.Builder.table).
 		Ident(col).
 		WriteOp(op).
 		Arg(val)
@@ -185,13 +186,14 @@ func (r *DB) buildJoin(joinType, table, on string) *DB {
 func (r *DB) WhereRaw(raw string, val ...interface{}) *DB {
 	r.Builder.where.WriteString(" WHERE ").
 		WriteString(raw).
-		Args(val...)
+		Params(val...)
 	return r
 }
 
 // Where accepts left operand-operator-right operand to apply them to where clause
 func (r *DB) Where(col string, op Op, val interface{}) *DB {
 	r.Builder.where.WriteString(" WHERE ").
+		IdentPoint(r.Builder.table).
 		Ident(col).
 		WriteOp(op).
 		Arg(val)
@@ -203,6 +205,7 @@ func (r *DB) Where(col string, op Op, val interface{}) *DB {
 func (r *DB) AndWhere(col string, op Op, val interface{}) *DB {
 	r.Builder.where.WriteString(and).
 		Pad().
+		IdentPoint(r.Builder.table).
 		Ident(col).
 		WriteOp(op).
 		Arg(val)
@@ -214,6 +217,7 @@ func (r *DB) AndWhere(col string, op Op, val interface{}) *DB {
 func (r *DB) OrWhere(col string, op Op, val interface{}) *DB {
 	r.Builder.where.WriteString(or).
 		Pad().
+		IdentPoint(r.Builder.table).
 		Ident(col).
 		WriteOp(op).
 		Arg(val)
@@ -223,6 +227,7 @@ func (r *DB) OrWhere(col string, op Op, val interface{}) *DB {
 // WhereBetween sets the clause BETWEEN 2 values
 func (r *DB) WhereBetween(col string, val1, val2 interface{}) *DB {
 	r.Builder.where.WriteString(" WHERE ").
+		IdentPoint(r.Builder.table).
 		Ident(col).
 		WriteOp(OpBetween).
 		Arg(val1).Pad().
@@ -235,6 +240,7 @@ func (r *DB) WhereBetween(col string, val1, val2 interface{}) *DB {
 func (r *DB) OrWhereBetween(col string, val1, val2 interface{}) *DB {
 	r.Builder.where.WriteString(or).
 		Pad().
+		IdentPoint(r.Builder.table).
 		Ident(col).
 		WriteOp(OpBetween).
 		Arg(val1).Pad().
@@ -247,6 +253,7 @@ func (r *DB) OrWhereBetween(col string, val1, val2 interface{}) *DB {
 func (r *DB) AndWhereBetween(col string, val1, val2 interface{}) *DB {
 	r.Builder.where.WriteString(and).
 		Pad().
+		IdentPoint(r.Builder.table).
 		Ident(col).
 		WriteOp(OpBetween).
 		Arg(val1).Pad().
@@ -258,6 +265,7 @@ func (r *DB) AndWhereBetween(col string, val1, val2 interface{}) *DB {
 // WhereNotBetween sets the clause NOT BETWEEN 2 values
 func (r *DB) WhereNotBetween(col string, val1, val2 interface{}) *DB {
 	r.Builder.where.WriteString(" WHERE ").
+		IdentPoint(r.Builder.table).
 		Ident(col).
 		WriteOp(OpNotBetween).
 		Arg(val1).Pad().
@@ -270,6 +278,7 @@ func (r *DB) WhereNotBetween(col string, val1, val2 interface{}) *DB {
 func (r *DB) OrWhereNotBetween(col string, val1, val2 interface{}) *DB {
 	r.Builder.where.WriteString(or).
 		Pad().
+		IdentPoint(r.Builder.table).
 		Ident(col).
 		WriteOp(OpNotBetween).
 		Arg(val1).Pad().
@@ -282,6 +291,7 @@ func (r *DB) OrWhereNotBetween(col string, val1, val2 interface{}) *DB {
 func (r *DB) AndWhereNotBetween(col string, val1, val2 interface{}) *DB {
 	r.Builder.where.WriteString(and).
 		Pad().
+		IdentPoint(r.Builder.table).
 		Ident(col).
 		WriteOp(OpNotBetween).
 		Arg(val1).Pad().
@@ -305,6 +315,7 @@ func (r *DB) Limit(lim int64) *DB {
 // WhereIn appends IN (val1, val2, val3...) stmt to WHERE clause
 func (r *DB) WhereIn(col string, in ...interface{}) *DB {
 	r.Builder.where.WriteString(" WHERE ").
+		IdentPoint(r.Builder.table).
 		Ident(col).
 		WriteOp(OpIn).
 		Nested(func(b *sqlBuilder) {
@@ -316,6 +327,7 @@ func (r *DB) WhereIn(col string, in ...interface{}) *DB {
 // WhereNotIn appends NOT IN (val1, val2, val3...) stmt to WHERE clause
 func (r *DB) WhereNotIn(col string, in ...interface{}) *DB {
 	r.Builder.where.WriteString(" WHERE ").
+		IdentPoint(r.Builder.table).
 		Ident(col).
 		WriteOp(OpNotIn).
 		Nested(func(b *sqlBuilder) {
@@ -328,6 +340,7 @@ func (r *DB) WhereNotIn(col string, in ...interface{}) *DB {
 func (r *DB) OrWhereIn(col string, in ...interface{}) *DB {
 	r.Builder.where.WriteString(or).
 		Pad().
+		IdentPoint(r.Builder.table).
 		Ident(col).
 		WriteOp(OpIn).
 		Nested(func(b *sqlBuilder) {
@@ -340,6 +353,7 @@ func (r *DB) OrWhereIn(col string, in ...interface{}) *DB {
 func (r *DB) OrWhereNotIn(col string, in ...interface{}) *DB {
 	r.Builder.where.WriteString(or).
 		Pad().
+		IdentPoint(r.Builder.table).
 		Ident(col).
 		WriteOp(OpNotIn).
 		Nested(func(b *sqlBuilder) {
@@ -352,6 +366,7 @@ func (r *DB) OrWhereNotIn(col string, in ...interface{}) *DB {
 func (r *DB) AndWhereIn(col string, in ...interface{}) *DB {
 	r.Builder.where.WriteString(and).
 		Pad().
+		IdentPoint(r.Builder.table).
 		Ident(col).
 		WriteOp(OpIn).
 		Nested(func(b *sqlBuilder) {
@@ -364,6 +379,7 @@ func (r *DB) AndWhereIn(col string, in ...interface{}) *DB {
 func (r *DB) AndWhereNotIn(col string, in ...interface{}) *DB {
 	r.Builder.where.WriteString(and).
 		Pad().
+		IdentPoint(r.Builder.table).
 		Ident(col).
 		WriteOp(OpNotIn).
 		Nested(func(b *sqlBuilder) {
@@ -375,6 +391,7 @@ func (r *DB) AndWhereNotIn(col string, in ...interface{}) *DB {
 // WhereNull appends col IS NULL stmt to WHERE clause
 func (r *DB) WhereNull(col string) *DB {
 	r.Builder.where.WriteString(" WHERE ").
+		IdentPoint(r.Builder.table).
 		Ident(col).
 		WriteOp(OpIsNull)
 	return r
@@ -383,6 +400,7 @@ func (r *DB) WhereNull(col string) *DB {
 // WhereNotNull appends col IS NOT NULL stmt to WHERE clause
 func (r *DB) WhereNotNull(col string) *DB {
 	r.Builder.where.WriteString(" WHERE ").
+		IdentPoint(r.Builder.table).
 		Ident(col).
 		WriteOp(OpNotNull)
 	return r
@@ -392,6 +410,7 @@ func (r *DB) WhereNotNull(col string) *DB {
 func (r *DB) OrWhereNull(col string) *DB {
 	r.Builder.where.WriteString(or).
 		Pad().
+		IdentPoint(r.Builder.table).
 		Ident(col).
 		WriteOp(OpIsNull)
 	return r
@@ -401,6 +420,7 @@ func (r *DB) OrWhereNull(col string) *DB {
 func (r *DB) OrWhereNotNull(col string) *DB {
 	r.Builder.where.WriteString(or).
 		Pad().
+		IdentPoint(r.Builder.table).
 		Ident(col).
 		WriteOp(OpNotNull)
 	return r
@@ -410,6 +430,7 @@ func (r *DB) OrWhereNotNull(col string) *DB {
 func (r *DB) AndWhereNull(col string) *DB {
 	r.Builder.where.WriteString(and).
 		Pad().
+		IdentPoint(r.Builder.table).
 		Ident(col).
 		WriteOp(OpIsNull)
 	return r
@@ -419,6 +440,7 @@ func (r *DB) AndWhereNull(col string) *DB {
 func (r *DB) AndWhereNotNull(col string) *DB {
 	r.Builder.where.WriteString(and).
 		Pad().
+		IdentPoint(r.Builder.table).
 		Ident(col).
 		WriteOp(OpNotNull)
 	return r
@@ -427,6 +449,7 @@ func (r *DB) AndWhereNotNull(col string) *DB {
 // WhereLike appends col is LIKE pattern stmt to WHERE clause
 func (r *DB) WhereLike(col string, pattern string) *DB {
 	r.Builder.where.WriteString(" WHERE ").
+		IdentPoint(r.Builder.table).
 		Ident(col).
 		WriteOp(OpLike).
 		Args(pattern)
@@ -437,6 +460,7 @@ func (r *DB) WhereLike(col string, pattern string) *DB {
 func (r *DB) OrWhereLike(col string, pattern string) *DB {
 	r.Builder.where.WriteString(or).
 		Pad().
+		IdentPoint(r.Builder.table).
 		Ident(col).
 		WriteOp(OpLike).
 		Args(pattern)
@@ -447,6 +471,7 @@ func (r *DB) OrWhereLike(col string, pattern string) *DB {
 func (r *DB) AndWhereLike(col string, pattern string) *DB {
 	r.Builder.where.WriteString(and).
 		Pad().
+		IdentPoint(r.Builder.table).
 		Ident(col).
 		WriteOp(OpLike).
 		Args(pattern)
@@ -456,6 +481,7 @@ func (r *DB) AndWhereLike(col string, pattern string) *DB {
 // WhereNotLike appends col is NOT LIKE pattern stmt to WHERE clause
 func (r *DB) WhereNotLike(col string, pattern string) *DB {
 	r.Builder.where.WriteString(" WHERE ").
+		IdentPoint(r.Builder.table).
 		Ident(col).
 		WriteOp(OpNotLike).
 		Args(pattern)
@@ -466,6 +492,7 @@ func (r *DB) WhereNotLike(col string, pattern string) *DB {
 func (r *DB) OrWhereNotLike(col string, pattern string) *DB {
 	r.Builder.where.WriteString(or).
 		Pad().
+		IdentPoint(r.Builder.table).
 		Ident(col).
 		WriteOp(OpNotLike).
 		Args(pattern)
@@ -476,6 +503,7 @@ func (r *DB) OrWhereNotLike(col string, pattern string) *DB {
 func (r *DB) AndWhereNotLike(col string, pattern string) *DB {
 	r.Builder.where.WriteString(and).
 		Pad().
+		IdentPoint(r.Builder.table).
 		Ident(col).
 		WriteOp(OpNotLike).
 		Args(pattern)
@@ -485,10 +513,12 @@ func (r *DB) AndWhereNotLike(col string, pattern string) *DB {
 // WhereEmpty appends col IS NOT NULL and IS EMPRTY str stmt to WHERE clause
 func (r *DB) WhereEmpty(col string) *DB {
 	r.Builder.where.WriteString(" WHERE ").
+		IdentPoint(r.Builder.table).
 		Ident(col).
 		WriteOp(OpEQ).
 		Arg("").
 		WriteString(or).
+		IdentPoint(r.Builder.table).
 		Ident(col).
 		WriteOp(OpIsNull)
 	return r
@@ -498,10 +528,12 @@ func (r *DB) WhereEmpty(col string) *DB {
 func (r *DB) OrWhereEmpty(col string) *DB {
 	r.Builder.where.WriteString(or).
 		Pad().
+		IdentPoint(r.Builder.table).
 		Ident(col).
 		WriteOp(OpEQ).
 		Arg("").
 		WriteString(or).
+		IdentPoint(r.Builder.table).
 		Ident(col).
 		WriteOp(OpIsNull)
 	return r
@@ -511,10 +543,12 @@ func (r *DB) OrWhereEmpty(col string) *DB {
 func (r *DB) AndWhereEmpty(col string) *DB {
 	r.Builder.where.WriteString(and).
 		Pad().
+		IdentPoint(r.Builder.table).
 		Ident(col).
 		WriteOp(OpEQ).
 		Arg("").
 		WriteString(or).
+		IdentPoint(r.Builder.table).
 		Ident(col).
 		WriteOp(OpIsNull)
 	return r
