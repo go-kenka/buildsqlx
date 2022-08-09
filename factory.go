@@ -68,16 +68,14 @@ func (r *builder) buildClauses() {
 
 	if r.limit > 0 {
 		r.Pad().WriteString("LIMIT").Pad()
+		if r.offset > 0 {
+			r.WriteString(strconv.FormatInt(r.offset, 10)).Comma()
+		}
 		r.WriteString(strconv.FormatInt(r.limit, 10))
 	}
 
-	if r.offset > 0 {
-		r.Comma()
-		r.WriteString(strconv.FormatInt(r.offset, 10))
-	}
-
 	if r.lockForUpdate != nil {
-		r.WriteString(*r.lockForUpdate)
+		r.Pad().WriteString(*r.lockForUpdate)
 	}
 }
 
