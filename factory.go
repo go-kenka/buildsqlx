@@ -1,6 +1,7 @@
 package buildsqlx
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 )
@@ -262,6 +263,80 @@ func (r *DB) Update(data map[string]interface{}) (query string, values []interfa
 	}
 
 	builder.buildClauses()
+
+	query += builder.String()
+	values = append(values, r.Builder.where.args...)
+
+	return
+}
+
+func (r *DB) UpdateBatch(where map[string][]int, update map[string][]interface{}) (query string, values []interface{}) {
+	builder := r.Builder
+	if builder.table == "" {
+		panic(errTableCallBeforeOp)
+	}
+
+	if len(where) == 0 || len(update) == 0 {
+		return
+	}
+
+	builder.WriteString("UPDATE").
+		Pad().Ident(builder.table).Pad().
+		WriteString("SET").Pad()
+
+	// 所有的条件字段数组
+	var whereKeys []string
+	for k := range where {
+		whereKeys = append(whereKeys, k)
+	}
+	// 第一个 where 条件所有的值
+	firstWhere := where[whereKeys[0]]
+
+	// 所有需要更新的字段数组
+	var needUpdateFieldsKeys []string
+	for k := range update {
+		needUpdateFieldsKeys = append(needUpdateFieldsKeys, k)
+	}
+
+	if len(firstWhere) != len(update[needUpdateFieldsKeys[0]]) {
+		// 更新的条件与更新的字段值数量不相等
+		return
+	}
+
+	var s1 []string
+	for k := range firstWhere {
+		for _, vv := range whereKeys {
+			s1 = append(s1, fmt.Sprintf("`%s` = %v AND ", vv, where[vv][k]))
+		}
+	}
+
+	// 按照 where 条件字段数量做切割
+	whereSize := len(whereKeys)
+	batches := make([][]string, 0, (len(s1)+whereSize-1)/whereSize)
+	for whereSize < len(s1) {
+		s1, batches = s1[whereSize:], append(batches, s1[0:whereSize:whereSize])
+	}
+	batches = append(batches, s1)
+
+	var whereArr []string
+	for _, v := range batches {
+		whereArr = append(whereArr, strings.TrimSuffix(strings.Join(v, " "), "AND "))
+	}
+
+	// 拼接 sql 语句
+	for i, v := range needUpdateFieldsKeys {
+		str := ""
+		for kk, vv := range whereArr {
+			str += fmt.Sprintf(" WHEN %v THEN %v ", vv, update[v][kk])
+		}
+
+		if i < len(needUpdateFieldsKeys)-1 {
+			builder.WriteString(fmt.Sprintf("`%s` = CASE %s ELSE `%s` END, ", v, str, v))
+		} else {
+			builder.WriteString(fmt.Sprintf("`%s` = CASE %s ELSE `%s` END", v, str, v))
+		}
+
+	}
 
 	query += builder.String()
 	values = append(values, r.Builder.where.args...)

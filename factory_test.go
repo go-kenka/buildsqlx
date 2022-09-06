@@ -29,3 +29,17 @@ func TestDB_Delete(t *testing.T) {
 	query, values := db.Table("posts").Where("points", OpGT, 3).Delete()
 	t.Logf("Insert query: %v, values:%+v", query, values)
 }
+
+func TestDB_UpdateBatch(t *testing.T) {
+	// where
+	where := make(map[string][]int)
+	where["id"] = []int{1, 2, 3, 4}
+	// update
+	update := make(map[string][]interface{})
+	update["name"] = []interface{}{"a1", "a2", "a3", "a4"}
+	update["org"] = []interface{}{"b1", "b2", "b3", "b4"}
+
+	// 	update
+	query, values := db.Table("table1").UpdateBatch(where, update)
+	t.Logf("Update query: %v, values:%+v", query, values)
+}
