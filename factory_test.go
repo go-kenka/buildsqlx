@@ -34,6 +34,7 @@ func TestDB_UpdateBatch(t *testing.T) {
 	// where
 	where := make(map[string][]int)
 	where["id"] = []int{1, 2, 3, 4}
+	// where["did"] = []int{1, 2, 3, 4}
 	// update
 	update := make(map[string][]interface{})
 	update["name"] = []interface{}{"a1", "a2", "a3", "a4"}

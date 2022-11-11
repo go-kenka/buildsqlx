@@ -1,7 +1,6 @@
 package buildsqlx
 
 import (
-	"fmt"
 	"strconv"
 	"strings"
 )
@@ -303,43 +302,95 @@ func (r *DB) UpdateBatch(where map[string][]int, update map[string][]interface{}
 		return
 	}
 
-	var s1 []string
+	type whereObj struct {
+		key   string
+		value int
+	}
+
+	var s1 []whereObj
 	for k := range firstWhere {
 		for _, vv := range whereKeys {
-			s1 = append(s1, fmt.Sprintf("`%s` = %v AND ", vv, where[vv][k]))
+			// s1 = append(s1, fmt.Sprintf("`%s` = %v AND ", vv, where[vv][k]))
+			s1 = append(s1, whereObj{
+				key:   vv,
+				value: where[vv][k],
+			})
 		}
 	}
 
 	// 按照 where 条件字段数量做切割
 	whereSize := len(whereKeys)
-	batches := make([][]string, 0, (len(s1)+whereSize-1)/whereSize)
+	batches := make([][]whereObj, 0, (len(s1)+whereSize-1)/whereSize)
 	for whereSize < len(s1) {
 		s1, batches = s1[whereSize:], append(batches, s1[0:whereSize:whereSize])
 	}
 	batches = append(batches, s1)
 
-	var whereArr []string
-	for _, v := range batches {
-		whereArr = append(whereArr, strings.TrimSuffix(strings.Join(v, " "), "AND "))
-	}
+	// var whereArr []string
+	// for _, v := range batches {
+	// 	whereArr = append(whereArr, strings.TrimSuffix(strings.Join(v, " "), "AND "))
+	// }
 
 	// 拼接 sql 语句
 	for i, v := range needUpdateFieldsKeys {
-		str := ""
-		for kk, vv := range whereArr {
-			str += fmt.Sprintf(" WHEN %v THEN %v ", vv, update[v][kk])
-		}
+		// str := ""
+		// for kk, vv := range whereArr {
+		// 	str += fmt.Sprintf(" WHEN %v THEN %v ", vv, update[v][kk])
+		// }
 
 		if i < len(needUpdateFieldsKeys)-1 {
-			builder.WriteString(fmt.Sprintf("`%s` = CASE %s ELSE `%s` END, ", v, str, v))
+
+			builder.Ident(v).WriteString(" = CASE ")
+
+			// 编辑case
+			for j, b := range batches {
+				// where条件
+				builder.WriteString(" WHEN ")
+				for k, w := range b {
+					if k < len(b)-1 {
+						builder.Ident(w.key).WriteString(" = ").Arg(w.value).WriteString(" AND ")
+					} else {
+						builder.Ident(w.key).WriteString(" = ").Arg(w.value)
+					}
+				}
+
+				// 更新内容
+				builder.WriteString(" THEN ")
+				builder.Arg(update[v][j])
+			}
+
+			builder.WriteString(" ELSE ").Ident(v).WriteString(" END, ")
+
+			// builder.WriteString(fmt.Sprintf("`%s` = CASE %s ELSE `%s` END, ", v, str, v))
 		} else {
-			builder.WriteString(fmt.Sprintf("`%s` = CASE %s ELSE `%s` END", v, str, v))
+			builder.Ident(v).WriteString(" = CASE ")
+
+			// 编辑case
+			for j, b := range batches {
+				// where条件
+				builder.WriteString(" WHEN ")
+				for k, w := range b {
+					if k < len(b)-1 {
+						builder.Ident(w.key).WriteString(" = ").Arg(w.value).WriteString(" AND ")
+					} else {
+						builder.Ident(w.key).WriteString(" = ").Arg(w.value)
+					}
+				}
+
+				// 更新内容
+				builder.WriteString(" THEN ")
+				builder.Arg(update[v][j])
+			}
+
+			builder.WriteString(" ELSE ").Ident(v).WriteString(" END")
+			// builder.WriteString(fmt.Sprintf("`%s` = CASE %s ELSE `%s` END", v, str, v))
 		}
 
 	}
 
 	query += builder.String()
-	values = append(values, r.Builder.where.args...)
+
+	values = append(values, builder.args...)
 
 	return
 }
