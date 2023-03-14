@@ -522,14 +522,16 @@ func (r *DB) AndWhereNotLike(col string, pattern string) *DB {
 // WhereEmpty appends col IS NOT NULL and IS EMPRTY str stmt to WHERE clause
 func (r *DB) WhereEmpty(col string) *DB {
 	r.Builder.where.WriteString(" WHERE ").
-		IdentPoint(r.Builder.table).
-		Ident(col).
-		WriteOp(OpEQ).
-		Arg("").
-		WriteString(or).
-		IdentPoint(r.Builder.table).
-		Ident(col).
-		WriteOp(OpIsNull)
+		Nested(func(sb *sqlBuilder) {
+			sb.IdentPoint(r.Builder.table).
+				Ident(col).
+				WriteOp(OpEQ).
+				Arg("").
+				WriteString(or).
+				IdentPoint(r.Builder.table).
+				Ident(col).
+				WriteOp(OpIsNull)
+		})
 	return r
 }
 
