@@ -536,30 +536,33 @@ func (r *DB) WhereEmpty(col string) *DB {
 // OrWhereEmpty appends col IS NOT NULL and IS EMPRTY str stmt to WHERE clause
 func (r *DB) OrWhereEmpty(col string) *DB {
 	r.Builder.where.WriteString(or).
-		Pad().
-		IdentPoint(r.Builder.table).
-		Ident(col).
-		WriteOp(OpEQ).
-		Arg("").
-		WriteString(or).
-		IdentPoint(r.Builder.table).
-		Ident(col).
-		WriteOp(OpIsNull)
+		Pad().Nested(func(sb *sqlBuilder) {
+		sb.IdentPoint(r.Builder.table).
+			Ident(col).
+			WriteOp(OpEQ).
+			Arg("").
+			WriteString(or).
+			IdentPoint(r.Builder.table).
+			Ident(col).
+			WriteOp(OpIsNull)
+	})
 	return r
 }
 
 // AndWhereEmpty appends col IS NOT NULL and IS EMPRTY str stmt to WHERE clause
 func (r *DB) AndWhereEmpty(col string) *DB {
 	r.Builder.where.WriteString(and).
-		Pad().
-		IdentPoint(r.Builder.table).
-		Ident(col).
-		WriteOp(OpEQ).
-		Arg("").
-		WriteString(or).
-		IdentPoint(r.Builder.table).
-		Ident(col).
-		WriteOp(OpIsNull)
+		Pad().Nested(func(sb *sqlBuilder) {
+		sb.IdentPoint(r.Builder.table).
+			Ident(col).
+			WriteOp(OpEQ).
+			Arg("").
+			WriteString(or).
+			IdentPoint(r.Builder.table).
+			Ident(col).
+			WriteOp(OpIsNull)
+	})
+
 	return r
 }
 
